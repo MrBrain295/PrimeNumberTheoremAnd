@@ -925,6 +925,52 @@ theorem final_comparison (ε : ℝ) (hε : 0 ≤ ε ∧ ε ≤ 1 / (89693 ^ 2 : 
 
 
 
+-- Helper lemma: for n ≥ X₀², we have (1 + 1/log³√n)^6 < √n
+lemma pow_six_lt_sqrt {n : ℕ} (hn : n ≥ X₀ ^ 2) :
+    (1 + 1 / (log (√(n : ℝ))) ^ 3) ^ (6:ℝ) < √(n : ℝ) := by
+  -- For n ≥ 89693², we have √n ≥ 89693
+  have hsqrt_lower : (89693 : ℝ) ≤ √(n : ℝ) := by
+    rw [Real.le_sqrt']
+    · exact_mod_cast hn
+    · norm_num
+  -- The base (1 + 1/log³√n) is positive
+  have hbase_pos : 0 < 1 + 1 / (log (√(n : ℝ))) ^ 3 := by
+    apply add_pos
+    · norm_num
+    · apply _root_.div_pos
+      · norm_num
+      · apply pow_pos
+        apply Real.log_pos
+        linarith
+  -- For large n, (1 + 1/log³√n) < 2, so (1 + 1/log³√n)^6 < 2^6 = 64 < 89693 ≤ √n
+  have hbase_small : 1 + 1 / (log (√(n : ℝ))) ^ 3 < 2 := by
+    suffices 1 / (log (√(n : ℝ))) ^ 3 < 1 by linarith
+    rw [div_lt_one]
+    · suffices 1 < log (√(n : ℝ)) by
+        calc 1 = 1 ^ 3 := by norm_num
+          _ < (log (√(n : ℝ))) ^ 3 := by gcongr
+      -- log(√n) ≥ log(89693) > log(e) = 1
+      have : log (Real.exp 1) = 1 := Real.log_exp 1
+      calc (1 : ℝ) = log (Real.exp 1) := this.symm
+        _ < log (89693 : ℝ) := by
+            apply Real.log_lt_log
+            · apply Real.exp_pos
+            · calc Real.exp 1 ≤ 2.7182818286 := Real.exp_one_lt_d9.le
+                _ < 89693 := by norm_num
+        _ ≤ log (√(n : ℝ)) := by
+            apply Real.log_le_log <;> [norm_num; exact hsqrt_lower]
+    · apply pow_pos
+      apply Real.log_pos
+      linarith
+  -- So (1 + 1/log³√n)^6 < 2^6 = 64 < 89693 ≤ √n
+  calc (1 + 1 / (log (√(n : ℝ))) ^ 3) ^ (6:ℝ)
+      < (2 : ℝ) ^ (6:ℝ) := by
+          apply Real.rpow_lt_rpow hbase_pos.le hbase_small
+          norm_num
+    _ = 64 := by norm_num
+    _ < 89693 := by norm_num
+    _ ≤ √(n : ℝ) := hsqrt_lower
+
 @[blueprint
   "prop:ineq-holds-large-n"
   (title := "Verification of \\eqref{eq:main-ineq} for large \\(n\\)")
@@ -941,12 +987,65 @@ noncomputable def Criterion.mk' {n : ℕ} (hn : n ≥ X₀ ^ 2) : Criterion := {
     1 ≤ 89693 ^ 2 := by decide
     _ ≤ n := hn
   hp := (exists_p_primes hn).choose_spec.1,
-  hp_mono := sorry
-  hq := sorry
-  hq_mono := sorry
-  h_ord_1 := sorry
-  h_ord_2 := sorry
-  h_ord_3 := sorry
+  hp_mono := (exists_p_primes hn).choose_spec.2.1
+  hq := (exists_q_primes hn).choose_spec.1
+  hq_mono := (exists_q_primes hn).choose_spec.2.1
+  h_ord_1 := (exists_p_primes hn).choose_spec.2.2.2
+  h_ord_2 := by
+    -- Extract the bounds from exists_p_primes and exists_q_primes
+    have hp_bound := (exists_p_primes hn).choose_spec.2.2.1
+    have hq_bound := (exists_q_primes hn).choose_spec.2.2.1
+    -- p 2 ≤ √n * (1 + 1/log³√n)^3
+    have hp2_upper : ((exists_p_primes hn).choose 2 : ℝ) ≤ √(n : ℝ) * (1 + 1 / (log (√(n : ℝ))) ^ 3) ^ (3:ℝ) := by
+      convert hp_bound 2 using 2
+      norm_num
+    -- q 0 ≥ n * (1 + 1/log³√n)^3
+    have hq0_lower : (n : ℝ) * (1 + 1 / (log (√(n : ℝ))) ^ 3) ^ (3:ℝ) ≤ ((exists_q_primes hn).choose 0 : ℝ) := by
+      have := hq_bound 0
+      simp only [Fin.val_zero, Nat.sub_zero] at this
+      convert this using 2
+      norm_num
+    -- Key inequality: √n * (1 + ε)^3 < n * (1 + ε)^3
+    have key : √(n : ℝ) * (1 + 1 / (log (√(n : ℝ))) ^ 3) ^ (3:ℝ) <
+               (n : ℝ) * (1 + 1 / (log (√(n : ℝ))) ^ 3) ^ (3:ℝ) := by
+      have hε_pos : 0 < 1 + 1 / (log (√(n : ℝ))) ^ 3 := by
+        apply add_pos
+        · norm_num
+        · apply _root_.div_pos
+          · norm_num
+          · apply pow_pos
+            apply Real.log_pos
+            have : (89693 : ℝ) ≤ √(n : ℝ) := by
+              rw [Real.le_sqrt']
+              · exact_mod_cast hn
+              · norm_num
+            linarith
+      -- √n < n for n > 1
+      have hsqrt_lt_n : √(n : ℝ) < (n : ℝ) := by
+        have hn_large : 1 < (n : ℝ) := by
+          calc (1 : ℝ) < 89693 ^ 2 := by norm_num
+            _ ≤ n := by exact_mod_cast hn
+        have : √(n : ℝ) * √(n : ℝ) = (n : ℝ) := Real.mul_self_sqrt (Nat.cast_nonneg n)
+        calc √(n : ℝ) = √(n : ℝ) * 1 := by ring
+          _ < √(n : ℝ) * √(n : ℝ) := by
+              gcongr
+              calc (1 : ℝ) < 89693 := by norm_num
+                _ = √(89693 ^ 2 : ℝ) := by
+                    rw [Real.sqrt_sq]
+                    norm_num
+                _ ≤ √(n : ℝ) := by
+                    apply Real.sqrt_le_sqrt
+                    exact_mod_cast hn
+          _ = (n : ℝ) := this
+      gcongr
+    -- Now show p 2 < q 0 (convert from Real inequality to Nat)
+    have key_real : ((exists_p_primes hn).choose 2 : ℝ) < ((exists_q_primes hn).choose 0 : ℝ) := by
+      calc ((exists_p_primes hn).choose 2 : ℝ)
+          ≤ √(n : ℝ) * (1 + 1 / (log (√(n : ℝ))) ^ 3) ^ (3:ℝ) := hp2_upper
+        _ < (n : ℝ) * (1 + 1 / (log (√(n : ℝ))) ^ 3) ^ (3:ℝ) := key
+        _ ≤ ((exists_q_primes hn).choose 0 : ℝ) := hq0_lower
+    exact Nat.cast_lt.mp key_real
+  h_ord_3 := (exists_q_primes hn).choose_spec.2.2.2
   h_crit  := sorry
 }
 
